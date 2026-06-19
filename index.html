@@ -74,6 +74,23 @@
 
   .mon-target{cursor:pointer}
 
+  .edit-bar{top:18px;right:20px;padding:10px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .edit-bar button{font-family:var(--mono);font-size:11px;letter-spacing:.4px;padding:8px 12px;border-radius:8px;border:1px solid var(--hud-stroke);
+    background:rgba(255,255,255,.06);color:var(--hud-ink);cursor:pointer;transition:background .2s,border-color .2s,box-shadow .2s}
+  .edit-bar button:hover{background:rgba(255,255,255,.12)}
+  .edit-bar button.active{background:rgba(52,224,161,.18);border-color:rgba(52,224,161,.55);color:var(--mon);box-shadow:0 0 14px rgba(52,224,161,.2)}
+  .edit-bar button.secondary{color:var(--hud-ink-dim)}
+  .edit-bar .hint{font-family:var(--mono);font-size:10px;color:var(--hud-ink-dim);padding-left:4px}
+
+  body.edit-mode svg{cursor:default}
+  body.edit-mode .draggable-node{cursor:grab}
+  body.edit-mode .draggable-node.dragging{cursor:grabbing;filter:url(#glow)}
+  body.edit-mode .draggable-node .drag-outline{display:block}
+  body.edit-mode .mon-target{cursor:grab}
+  body.edit-mode .mon.open{display:none!important}
+
+  .drag-outline{display:none;pointer-events:none;fill:none;stroke:var(--mon);stroke-width:2;stroke-dasharray:6 4;opacity:.85}
+
   @media (max-width:1000px){.mon.open{display:none}}
 </style>
 </head>
@@ -105,21 +122,21 @@
   <!-- ============ WIRES (under nodes) ============ -->
   <g id="wires">
     <!-- internal core -->
-    <path id="w-aims-ocp" class="wire" data-nodes="aims ocp" d="M495 357 L495 425" marker-end="url(#aCyan)"/>
-    <path id="w-ocp-api"  class="wire" data-nodes="ocp api"  d="M495 515 L495 575" marker-end="url(#aBlue)"/>
+    <path id="w-aims-ocp" class="wire" data-from="aims" data-to="ocp" data-nodes="aims ocp" d="M495 357 L495 425" marker-end="url(#aCyan)"/>
+    <path id="w-ocp-api"  class="wire" data-from="ocp" data-to="api" data-nodes="ocp api"  d="M495 515 L495 575" marker-end="url(#aBlue)"/>
     <!-- core <-> mobile (two-way) -->
-    <path id="w-core-mobile" class="wire" data-nodes="core mobile" d="M330 470 L236 458" marker-end="url(#aBlue)" marker-start="url(#sBlue)"/>
+    <path id="w-core-mobile" class="wire" data-from="core" data-to="mobile" data-nodes="core mobile" d="M330 470 L236 458" marker-end="url(#aBlue)" marker-start="url(#sBlue)"/>
     <!-- core -> web -->
-    <path id="w-core-web" class="wire" data-nodes="core web" d="M660 470 L770 458" marker-end="url(#aBlue)"/>
+    <path id="w-core-web" class="wire" data-from="core" data-to="web" data-nodes="core web" d="M660 470 L770 458" marker-end="url(#aBlue)"/>
     <!-- web -> 4 destinations -->
-    <path id="w-web-db"  class="wire" data-nodes="web db"  d="M1010 430 C1110 320,1150 210,1218 168" marker-end="url(#aGreen)"/>
-    <path id="w-web-efrc" class="wire" data-nodes="web efrc" d="M1010 448 C1100 408,1150 350,1193 322" marker-end="url(#aCyan)"/>
-    <path id="w-web-nav" class="wire" data-nodes="web navblue" d="M1010 466 L1193 470" marker-end="url(#aViolet)"/>
-    <path id="w-web-email" class="wire" data-nodes="web email" d="M1010 484 C1100 540,1150 596,1193 620" marker-end="url(#aAmber)"/>
+    <path id="w-web-db"  class="wire" data-from="web" data-to="db" data-curve="1" data-nodes="web db"  d="M1010 430 C1110 320,1150 210,1218 168" marker-end="url(#aGreen)"/>
+    <path id="w-web-efrc" class="wire" data-from="web" data-to="efrc" data-curve="1" data-nodes="web efrc" d="M1010 448 C1100 408,1150 350,1193 322" marker-end="url(#aCyan)"/>
+    <path id="w-web-nav" class="wire" data-from="web" data-to="navblue" data-nodes="web navblue" d="M1010 466 L1193 470" marker-end="url(#aViolet)"/>
+    <path id="w-web-email" class="wire" data-from="web" data-to="email" data-curve="1" data-nodes="web email" d="M1010 484 C1100 540,1150 596,1193 620" marker-end="url(#aAmber)"/>
     <!-- web <-> google (two-way) -->
-    <path id="w-web-google" class="wire" data-nodes="web google" d="M888 532 L888 608" marker-end="url(#aTeal)" marker-start="url(#sTeal)"/>
+    <path id="w-web-google" class="wire" data-from="web" data-to="google" data-nodes="web google" d="M888 532 L888 608" marker-end="url(#aTeal)" marker-start="url(#sTeal)"/>
     <!-- google -> mobile notification -->
-    <path id="w-google-mobile" class="wire notif" data-nodes="google mobile" d="M770 668 C520 800,280 700,126 536" marker-end="url(#aAmber)"/>
+    <path id="w-google-mobile" class="wire notif" data-from="google" data-to="mobile" data-curve="wide" data-nodes="google mobile" d="M770 668 C520 800,280 700,126 536" marker-end="url(#aAmber)"/>
   </g>
 
   <!-- traveling sparks -->
@@ -139,7 +156,8 @@
   <!-- ============ NODES ============ -->
 
   <!-- MOBILE APP -->
-  <g class="node" data-id="mobile">
+  <g class="node draggable-node" data-id="mobile">
+    <rect class="drag-outline" x="20" y="382" width="206" height="152" rx="16"/>
     <rect x="20" y="382" width="206" height="152" rx="16" fill="url(#gNode)" stroke="var(--violet)" stroke-width="2"/>
     <rect x="100" y="404" width="46" height="76" rx="7" fill="none" stroke="var(--violet)" stroke-width="1.8" opacity=".8"/>
     <circle cx="123" cy="470" r="4" fill="var(--violet)"/>
@@ -148,12 +166,14 @@
   </g>
 
   <!-- CORE RECTANGLE -->
-  <g class="node" data-id="core">
+  <g class="node draggable-node" data-id="core">
+    <rect class="drag-outline" x="330" y="246" width="330" height="480" rx="22"/>
     <rect x="330" y="246" width="330" height="480" rx="22" fill="url(#gCore)" stroke="rgba(110,139,255,.5)" stroke-width="2.2"/>
     <text x="350" y="274" font-size="13" letter-spacing="2.5" fill="var(--blue-2)" font-family="var(--disp)" font-weight="600">MCC-MEL INTEGRATION CORE</text>
 
     <!-- AIMS API (M1) -->
-    <g class="mon-target" data-id="aims">
+    <g class="mon-target draggable-node" data-id="aims">
+      <rect class="drag-outline" x="365" y="299" width="260" height="58" rx="12"/>
       <rect x="365" y="299" width="260" height="58" rx="12" fill="url(#gNode)" stroke="var(--cyan)" stroke-width="2"/>
       <circle cx="385" cy="328" r="5" fill="var(--cyan)" filter="url(#glow)"/>
       <text class="nt" x="403" y="325" font-size="16" text-anchor="start">AIMS API</text>
@@ -161,7 +181,8 @@
     </g>
 
     <!-- OCP hexagon -->
-    <g data-id="ocp">
+    <g class="draggable-node" data-id="ocp">
+      <rect class="drag-outline" x="420" y="425" width="150" height="90" rx="12"/>
       <circle cx="495" cy="470" r="68" fill="none" stroke="var(--blue)" opacity=".25" filter="url(#soft)"/>
       <polygon points="458,425 532,425 570,470 532,515 458,515 420,470" fill="url(#gOcp)" stroke="var(--blue-2)" stroke-width="2.2"/>
       <text class="nt" x="495" y="468" font-size="20" text-anchor="middle">OCP</text>
@@ -169,7 +190,8 @@
     </g>
 
     <!-- API invoke/revoke (M2) -->
-    <g class="mon-target" data-id="api">
+    <g class="mon-target draggable-node" data-id="api">
+      <rect class="drag-outline" x="355" y="572" width="280" height="132" rx="14"/>
       <rect x="355" y="572" width="280" height="132" rx="14" fill="url(#gNode)" stroke="var(--blue-2)" stroke-width="2"/>
       <text x="495" y="595" font-size="13" letter-spacing="2" text-anchor="middle" fill="var(--blue-2)" font-family="var(--disp)" font-weight="600">API</text>
       <g>
@@ -186,7 +208,8 @@
   </g>
 
   <!-- WEB APP (M3) -->
-  <g class="node mon-target" data-id="web">
+  <g class="node mon-target draggable-node" data-id="web">
+    <rect class="drag-outline" x="770" y="382" width="240" height="150" rx="16"/>
     <rect x="770" y="382" width="240" height="150" rx="16" fill="url(#gNode)" stroke="var(--teal)" stroke-width="2"/>
     <circle cx="792" cy="406" r="5" fill="var(--teal)" filter="url(#glow)"/>
     <text class="nt" x="890" y="452" font-size="17" text-anchor="middle">Web MCC-MEL App</text>
@@ -195,7 +218,8 @@
   </g>
 
   <!-- GOOGLE API -->
-  <g class="node" data-id="google">
+  <g class="node draggable-node" data-id="google">
+    <rect class="drag-outline" x="770" y="610" width="240" height="106" rx="14"/>
     <rect x="770" y="610" width="240" height="106" rx="14" fill="url(#gNode)" stroke="var(--blue-2)" stroke-width="2"/>
     <circle cx="792" cy="632" r="5" fill="var(--blue-2)" filter="url(#glow)"/>
     <text class="nt" x="890" y="656" font-size="16" text-anchor="middle">Google API</text>
@@ -204,7 +228,8 @@
   </g>
 
   <!-- DATABASE (M4) cylinder -->
-  <g class="node mon-target" data-id="db">
+  <g class="node mon-target draggable-node" data-id="db">
+    <rect class="drag-outline" x="1220" y="132" width="160" height="88" rx="12"/>
     <g stroke="var(--green)" stroke-width="2" fill="url(#gNode)">
       <path d="M1220 132 a80 16 0 0 0 160 0 v72 a80 16 0 0 1 -160 0 z"/>
       <ellipse cx="1300" cy="132" rx="80" ry="16"/>
@@ -214,21 +239,24 @@
   </g>
 
   <!-- EFRC API internal (M5) -->
-  <g class="node mon-target" data-id="efrc">
+  <g class="node mon-target draggable-node" data-id="efrc">
+    <rect class="drag-outline" x="1193" y="280" width="214" height="84" rx="13"/>
     <rect x="1193" y="280" width="214" height="84" rx="13" fill="url(#gNode)" stroke="var(--cyan)" stroke-width="2"/>
     <text class="nt" x="1300" y="318" font-size="16" text-anchor="middle">EFRC API</text>
     <text class="ns" x="1300" y="338" font-size="11" text-anchor="middle" fill="var(--cyan)">internal API</text>
   </g>
 
   <!-- NAVBLUE API external (M6) -->
-  <g class="node mon-target" data-id="navblue">
+  <g class="node mon-target draggable-node" data-id="navblue">
+    <rect class="drag-outline" x="1193" y="428" width="214" height="84" rx="13"/>
     <rect x="1193" y="428" width="214" height="84" rx="13" fill="url(#gNode)" stroke="var(--violet)" stroke-width="2"/>
     <text class="nt" x="1300" y="466" font-size="16" text-anchor="middle">Navblue API</text>
     <text class="ns" x="1300" y="486" font-size="11" text-anchor="middle" fill="var(--violet)">external API</text>
   </g>
 
   <!-- EMAIL (M7) -->
-  <g class="node mon-target" data-id="email">
+  <g class="node mon-target draggable-node" data-id="email">
+    <rect class="drag-outline" x="1193" y="578" width="214" height="84" rx="13"/>
     <rect x="1193" y="578" width="214" height="84" rx="13" fill="url(#gNode)" stroke="var(--amber)" stroke-width="2"/>
     <path d="M1268 606 l32 22 l32 -22" fill="none" stroke="var(--amber)" stroke-width="2"/>
     <rect x="1268" y="606" width="64" height="44" rx="5" fill="none" stroke="var(--amber)" stroke-width="1.8"/>
@@ -260,6 +288,13 @@
   <div class="hud mon">
     <h2>Monitoring nodes</h2>
     <div id="monlist"></div>
+  </div>
+
+  <div class="hud edit-bar">
+    <button id="btn-edit" type="button">Edit layout</button>
+    <button id="btn-save" type="button" class="secondary" hidden>Save</button>
+    <button id="btn-reset" type="button" class="secondary" hidden>Reset</button>
+    <span class="hint" id="edit-hint"></span>
   </div>
 </div>
 
@@ -295,6 +330,7 @@ svg.addEventListener('wheel',e=>{
 
 let pan=null;
 svg.addEventListener('pointerdown',e=>{
+  if(editMode&&e.target.closest('.draggable-node'))return;
   if(e.button!==0&&e.button!==1)return;
   pan={x:view.x,y:view.y,sx:e.clientX,sy:e.clientY,moved:false};
   svg.classList.add('panning');
@@ -372,6 +408,7 @@ function setMon(nodeId){
 document.querySelectorAll('.mon-target').forEach(n=>{
   n.style.cursor='pointer';
   n.addEventListener('click',e=>{
+    if(editMode)return;
     if(didPan){didPan=false;return;}
     e.stopPropagation();setMon(n.dataset.id);
   });
@@ -404,13 +441,171 @@ function setHL(id){
   monTargets.forEach(n=>n.classList.toggle('dim',!near.has(n.dataset.id)));
 }
 nodes.forEach(n=>{
-  n.addEventListener('pointerenter',()=>{if(activeMon||pan)return;setHL(n.dataset.id);});
-  n.addEventListener('pointerleave',()=>{if(activeMon||pan)return;setHL(null);});
+  n.addEventListener('pointerenter',()=>{if(editMode||activeMon||pan)return;setHL(n.dataset.id);});
+  n.addEventListener('pointerleave',()=>{if(editMode||activeMon||pan)return;setHL(null);});
 });
 monTargets.forEach(n=>{
-  n.addEventListener('pointerenter',()=>{if(activeMon||pan)return;setHL(n.dataset.id);});
-  n.addEventListener('pointerleave',()=>{if(activeMon||pan)return;setHL(null);});
+  n.addEventListener('pointerenter',()=>{if(editMode||activeMon||pan)return;setHL(n.dataset.id);});
+  n.addEventListener('pointerleave',()=>{if(editMode||activeMon||pan)return;setHL(null);});
 });
+
+/* ============ EDIT MODE — drag nodes, fluent wires ============ */
+const diagram=document.getElementById('diagram');
+const STORAGE_KEY='mcc-mel-layout-v1';
+const draggableNodes=[...document.querySelectorAll('.draggable-node')];
+const nodeById=Object.fromEntries(draggableNodes.map(n=>[n.dataset.id,n]));
+let editMode=false;
+let dragNode=null;
+let dragStart=null;
+const defaultLabel='M1–M7 MONITORING POINTS SHOWN · CLICK NODE FOR DETAILS';
+
+function toDiagramCoords(clientX,clientY){
+  const pt=svg.createSVGPoint();pt.x=clientX;pt.y=clientY;
+  return pt.matrixTransform(diagram.getScreenCTM().inverse());
+}
+function getTranslate(g){
+  const t=g.getAttribute('transform')||'';
+  const m=t.match(/translate\(([-\d.]+)[,\s]+([-\d.]+)\)/);
+  return m?{x:+m[1],y:+m[2]}:{x:0,y:0};
+}
+function setTranslate(g,x,y){
+  g.setAttribute('transform',`translate(${x.toFixed(2)},${y.toFixed(2)})`);
+}
+function getDiagramBBox(el){
+  const bb=el.getBBox();
+  const tf=diagram.getCTM().inverse().multiply(el.getCTM());
+  const corners=[
+    {x:bb.x,y:bb.y},{x:bb.x+bb.width,y:bb.y},
+    {x:bb.x+bb.width,y:bb.y+bb.height},{x:bb.x,y:bb.y+bb.height}
+  ].map(p=>{const pt=svg.createSVGPoint();pt.x=p.x;pt.y=p.y;return pt.matrixTransform(tf);});
+  const xs=corners.map(p=>p.x),ys=corners.map(p=>p.y);
+  const x=Math.min(...xs),y=Math.min(...ys);
+  return{x,y,width:Math.max(...xs)-x,height:Math.max(...ys)-y,
+    cx:(Math.min(...xs)+Math.max(...xs))/2,cy:(Math.min(...ys)+Math.max(...ys))/2};
+}
+function anchorPoint(nodeId,toward){
+  const box=getDiagramBBox(nodeById[nodeId]);
+  const cx=box.cx,cy=box.cy;
+  const dx=toward.x-cx,dy=toward.y-cy;
+  if(Math.abs(dx)>Math.abs(dy)){
+    return dx>0?{x:box.x+box.width,y:cy}:{x:box.x,y:cy};
+  }
+  return dy>0?{x:cx,y:box.y+box.height}:{x:cx,y:box.y};
+}
+function wirePath(p1,p2,curve){
+  const dx=p2.x-p1.x,dy=p2.y-p1.y;
+  if(!curve||Math.hypot(dx,dy)<40){
+    return`M${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  if(curve==='wide'){
+    const dist=Math.hypot(dx,dy)||1;
+    const nx=-dy/dist,ny=dx/dist;
+    const bend=dist*0.35;
+    const c1x=p1.x+dx*0.25+nx*bend,c1y=p1.y+dy*0.25+ny*bend;
+    const c2x=p1.x+dx*0.75+nx*bend,c2y=p1.y+dy*0.75+ny*bend;
+    return`M${p1.x.toFixed(1)} ${p1.y.toFixed(1)} C${c1x.toFixed(1)} ${c1y.toFixed(1)},${c2x.toFixed(1)} ${c2y.toFixed(1)},${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  if(Math.abs(dx)>Math.abs(dy)){
+    const c1x=p1.x+dx*0.45,c1y=p1.y,c2x=p2.x-dx*0.45,c2y=p2.y;
+    return`M${p1.x.toFixed(1)} ${p1.y.toFixed(1)} C${c1x.toFixed(1)} ${c1y.toFixed(1)},${c2x.toFixed(1)} ${c2y.toFixed(1)},${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  const c1x=p1.x,c1y=p1.y+dy*0.45,c2x=p2.x,c2y=p2.y-dy*0.45;
+  return`M${p1.x.toFixed(1)} ${p1.y.toFixed(1)} C${c1x.toFixed(1)} ${c1y.toFixed(1)},${c2x.toFixed(1)} ${c2y.toFixed(1)},${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+}
+function updateAllWires(){
+  wires.forEach(w=>{
+    const from=nodeById[w.dataset.from],to=nodeById[w.dataset.to];
+    if(!from||!to)return;
+    const bFrom=getDiagramBBox(from),bTo=getDiagramBBox(to);
+    const towardTo={x:bTo.cx,y:bTo.cy},towardFrom={x:bFrom.cx,y:bFrom.cy};
+    const p1=anchorPoint(w.dataset.from,towardTo);
+    const p2=anchorPoint(w.dataset.to,towardFrom);
+    const curve=w.dataset.curve||null;
+    w.setAttribute('d',wirePath(p1,p2,curve));
+  });
+}
+function updatePill(nodeId){
+  const pill=pillByNode[nodeId],nodeEl=nodeById[nodeId];
+  if(!pill||!nodeEl)return;
+  const b=getDiagramBBox(nodeEl);
+  const x=b.x+b.width-8,y=b.y+16;
+  const rect=pill.querySelector('rect'),text=pill.querySelector('text'),dot=pill.querySelector('.live-dot');
+  rect.setAttribute('x',x-24);rect.setAttribute('y',y-14);
+  text.setAttribute('x',x);text.setAttribute('y',y+1);
+  dot.setAttribute('cx',x+30);dot.setAttribute('cy',y);
+}
+function updateAllPills(){MON.forEach(([,id])=>updatePill(id));}
+function saveLayout(){
+  const layout={};
+  draggableNodes.forEach(n=>{const t=getTranslate(n);if(t.x||t.y)layout[n.dataset.id]=t;});
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(layout));
+}
+function loadLayout(){
+  try{
+    const layout=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
+    draggableNodes.forEach(n=>{
+      const t=layout[n.dataset.id];
+      if(t)setTranslate(n,t.x,t.y);
+    });
+  }catch(_){}
+  updateAllWires();
+  updateAllPills();
+}
+function resetLayout(){
+  localStorage.removeItem(STORAGE_KEY);
+  draggableNodes.forEach(n=>n.removeAttribute('transform'));
+  updateAllWires();
+  updateAllPills();
+}
+function setEditMode(on){
+  editMode=on;
+  document.body.classList.toggle('edit-mode',on);
+  document.getElementById('btn-edit').classList.toggle('active',on);
+  document.getElementById('btn-save').hidden=!on;
+  document.getElementById('btn-reset').hidden=!on;
+  document.getElementById('edit-hint').textContent=on?'Drag any box · arrows follow · pan on empty space':'';
+  if(on){
+    if(activeMon){activeMon=null;monPanel.classList.remove('open');setHL(null);}
+    liveLabel.textContent='EDIT MODE · DRAG BOXES TO REPOSITION';
+    updateAllWires();
+    updateAllPills();
+  }else{
+    liveLabel.textContent=defaultLabel;
+    saveLayout();
+  }
+}
+draggableNodes.forEach(node=>{
+  node.addEventListener('pointerdown',e=>{
+    if(!editMode||e.button!==0)return;
+    e.stopPropagation();
+    dragNode=node;
+    const p=toDiagramCoords(e.clientX,e.clientY);
+    const t=getTranslate(node);
+    dragStart={px:p.x,py:p.y,tx:t.x,ty:t.y};
+    node.classList.add('dragging');
+    node.setPointerCapture(e.pointerId);
+  });
+});
+svg.addEventListener('pointermove',e=>{
+  if(!editMode||!dragNode||!dragStart)return;
+  const p=toDiagramCoords(e.clientX,e.clientY);
+  setTranslate(dragNode,dragStart.tx+(p.x-dragStart.px),dragStart.ty+(p.y-dragStart.py));
+  updateAllWires();
+  updateAllPills();
+});
+function endNodeDrag(e){
+  if(!dragNode)return;
+  dragNode.classList.remove('dragging');
+  try{dragNode.releasePointerCapture(e.pointerId);}catch(_){}
+  dragNode=null;dragStart=null;
+  saveLayout();
+}
+svg.addEventListener('pointerup',e=>{if(dragNode)endNodeDrag(e);});
+svg.addEventListener('pointercancel',e=>{if(dragNode)endNodeDrag(e);});
+document.getElementById('btn-edit').addEventListener('click',()=>setEditMode(!editMode));
+document.getElementById('btn-save').addEventListener('click',()=>{saveLayout();setEditMode(false);});
+document.getElementById('btn-reset').addEventListener('click',()=>{if(confirm('Reset layout to default positions?'))resetLayout();});
+loadLayout();
 
 /* clock */
 setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB',{hour12:false})+' IST';},1000);
