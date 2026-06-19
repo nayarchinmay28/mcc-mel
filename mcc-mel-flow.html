@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MCC / MEL — Aircraft Integration Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-0:#080808;--bg-1:#111111;
+    --hud-ink:#F0F0F0;--hud-ink-dim:#A3A3A3;--hud-stroke:rgba(255,255,255,.14);
+    --ink:#F4F7FF;--ink-dim:#A8B8E0;--ink-faint:#7A8FC4;
+    --stroke:rgba(90,140,255,.22);--blue:#2E7BFF;--blue-2:#6BA4FF;--cyan:#59E0FF;
+    --teal:#2FD7C4;--green:#34D399;--violet:#A66BFF;--amber:#FFB23E;--mon:#34E0A1;
+    --wire:rgba(107,164,255,.6);
+    --mono:"JetBrains Mono",ui-monospace,monospace;--disp:"Space Grotesk",system-ui,sans-serif;--body:"Inter",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg-0);color:var(--hud-ink);font-family:var(--body);overflow:hidden}
+  #stage{position:fixed;inset:0;background:radial-gradient(1300px 820px at 46% 42%,#1A1A1A 0%,var(--bg-1) 48%,var(--bg-0) 100%)}
+  svg{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+  svg.panning{cursor:grabbing}
+
+  .hud{position:absolute;z-index:5;background:linear-gradient(180deg,rgba(28,28,28,.88),rgba(14,14,14,.84));
+    border:1px solid var(--hud-stroke);border-radius:14px;backdrop-filter:blur(14px);
+    box-shadow:0 12px 40px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.06)}
+  .title{top:18px;left:20px;padding:14px 18px;display:flex;align-items:center;gap:13px}
+  .badge{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-family:var(--disp);
+    font-weight:700;background:linear-gradient(135deg,#555,#E0E0E0);color:#111;box-shadow:0 0 18px rgba(255,255,255,.12);font-size:13px}
+  .title h1{font-family:var(--disp);font-size:18px;font-weight:600;margin:0;letter-spacing:.3px}
+  .title .sub{font-family:var(--mono);font-size:11.5px;color:var(--hud-ink-dim);letter-spacing:.5px;margin-top:3px}
+  .live{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--mon);margin-top:7px}
+  .live .d{width:7px;height:7px;border-radius:50%;background:var(--mon);box-shadow:0 0 10px var(--mon);animation:pulse 1.5s infinite}
+
+  .mon{bottom:18px;right:18px;padding:16px 18px;width:330px;display:none;opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s}
+  .mon.open{display:block;opacity:1;transform:translateY(0)}
+  .mon h2{font-family:var(--mono);font-size:11px;letter-spacing:1.4px;color:var(--hud-ink-dim);margin:0 0 10px;text-transform:uppercase}
+  .mrow{display:flex;align-items:center;gap:10px;padding:7px 10px;font-family:var(--mono);font-size:12.5px;border-bottom:1px solid rgba(255,255,255,.08);border-radius:6px;transition:background .2s;cursor:pointer}
+  .mrow:hover{background:rgba(52,224,161,.06)}
+  .mrow.active{background:rgba(52,224,161,.12)}
+  .mrow:last-child{border-bottom:none}
+  .mid{font-family:var(--disp);font-weight:700;color:var(--cyan);width:30px}
+  .mrow .dot{width:8px;height:8px;border-radius:50%;background:var(--mon);box-shadow:0 0 8px var(--mon);animation:pulse 1.6s infinite;margin-left:auto}
+  .mname{color:var(--hud-ink-dim)}
+
+  .legend{bottom:18px;left:20px;padding:14px 18px;display:flex;gap:18px;flex-wrap:wrap}
+  .lg{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--hud-ink-dim)}
+  .lg i{width:18px;height:3px;border-radius:3px;display:inline-block}
+  .lg b{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  @keyframes dash{to{stroke-dashoffset:-16}}
+
+  .wire{fill:none;stroke:var(--wire);stroke-width:3;stroke-dasharray:7 9;animation:dash 1.1s linear infinite;transition:opacity .2s,stroke-width .2s}
+  .wire.notif{stroke:var(--amber);stroke-dasharray:3 10;animation:dash 1.4s linear infinite}
+  .wire.hl{stroke-width:4.5;opacity:1;filter:url(#glow)}
+  .wire.off{opacity:.1}
+  .spark{filter:url(#glow)}
+
+  .node{transition:opacity .2s,filter .2s;cursor:default}
+  .node:hover{filter:url(#glow)}
+  .node.dim{opacity:.22}
+  .mon-target.dim{opacity:.22}
+  text{font-family:var(--mono);fill:var(--ink);user-select:none}
+  .nt{font-family:var(--disp);font-weight:700}
+  .ns{fill:var(--ink-dim)}
+  .mpill text{fill:#04122A;font-weight:700;font-family:var(--disp)}
+  .mpill{pointer-events:none;transition:opacity .25s,transform .25s}
+  .mpill.active{transform:scale(1.08)}
+  .mpill.active rect{stroke:var(--cyan);stroke-width:2.2}
+  .mpill .live-dot{fill:var(--mon);filter:url(#glow)}
+
+  .mon-target{cursor:pointer}
+
+  @media (max-width:1000px){.mon.open{display:none}}
+</style>
+</head>
+<body>
+<div id="stage">
+<svg id="svg" viewBox="0 0 1620 980" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="gCore" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(24,42,98,.55)"/><stop offset="1" stop-color="rgba(8,14,38,.6)"/></linearGradient>
+    <linearGradient id="gNode" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(26,44,96,.95)"/><stop offset="1" stop-color="rgba(10,18,46,.96)"/></linearGradient>
+    <radialGradient id="gOcp" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#2E7BFF"/><stop offset="100%" stop-color="#0E1E50"/></radialGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="soft" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="10"/></filter>
+    <marker id="aBlue" markerWidth="11" markerHeight="11" refX="8" refY="5" orient="auto"><path d="M0 0 L9 5 L0 10 z" fill="#6BA4FF"/></marker>
+    <marker id="aCyan" markerWidth="11" markerHeight="11" refX="8" refY="5" orient="auto"><path d="M0 0 L9 5 L0 10 z" fill="#59E0FF"/></marker>
+    <marker id="aGreen" markerWidth="11" markerHeight="11" refX="8" refY="5" orient="auto"><path d="M0 0 L9 5 L0 10 z" fill="#34D399"/></marker>
+    <marker id="aViolet" markerWidth="11" markerHeight="11" refX="8" refY="5" orient="auto"><path d="M0 0 L9 5 L0 10 z" fill="#A66BFF"/></marker>
+    <marker id="aAmber" markerWidth="11" markerHeight="11" refX="8" refY="5" orient="auto"><path d="M0 0 L9 5 L0 10 z" fill="#FFB23E"/></marker>
+    <marker id="aTeal" markerWidth="11" markerHeight="11" refX="8" refY="5" orient="auto"><path d="M0 0 L9 5 L0 10 z" fill="#2FD7C4"/></marker>
+    <marker id="sBlue" markerWidth="11" markerHeight="11" refX="2" refY="5" orient="auto"><path d="M9 0 L0 5 L9 10 z" fill="#6BA4FF"/></marker>
+    <marker id="sTeal" markerWidth="11" markerHeight="11" refX="2" refY="5" orient="auto"><path d="M9 0 L0 5 L9 10 z" fill="#2FD7C4"/></marker>
+  </defs>
+
+  <!-- background grid -->
+  <g id="diagram" transform="translate(42, 18) scale(1.12)">
+  <g opacity=".45" stroke="rgba(255,255,255,.06)">
+    <g id="grid"></g>
+  </g>
+
+  <!-- ============ WIRES (under nodes) ============ -->
+  <g id="wires">
+    <!-- internal core -->
+    <path id="w-aims-ocp" class="wire" data-nodes="aims ocp" d="M495 357 L495 425" marker-end="url(#aCyan)"/>
+    <path id="w-ocp-api"  class="wire" data-nodes="ocp api"  d="M495 515 L495 575" marker-end="url(#aBlue)"/>
+    <!-- core <-> mobile (two-way) -->
+    <path id="w-core-mobile" class="wire" data-nodes="core mobile" d="M330 470 L236 458" marker-end="url(#aBlue)" marker-start="url(#sBlue)"/>
+    <!-- core -> web -->
+    <path id="w-core-web" class="wire" data-nodes="core web" d="M660 470 L770 458" marker-end="url(#aBlue)"/>
+    <!-- web -> 4 destinations -->
+    <path id="w-web-db"  class="wire" data-nodes="web db"  d="M1010 430 C1110 320,1150 210,1218 168" marker-end="url(#aGreen)"/>
+    <path id="w-web-efrc" class="wire" data-nodes="web efrc" d="M1010 448 C1100 408,1150 350,1193 322" marker-end="url(#aCyan)"/>
+    <path id="w-web-nav" class="wire" data-nodes="web navblue" d="M1010 466 L1193 470" marker-end="url(#aViolet)"/>
+    <path id="w-web-email" class="wire" data-nodes="web email" d="M1010 484 C1100 540,1150 596,1193 620" marker-end="url(#aAmber)"/>
+    <!-- web <-> google (two-way) -->
+    <path id="w-web-google" class="wire" data-nodes="web google" d="M888 532 L888 608" marker-end="url(#aTeal)" marker-start="url(#sTeal)"/>
+    <!-- google -> mobile notification -->
+    <path id="w-google-mobile" class="wire notif" data-nodes="google mobile" d="M770 668 C520 800,280 700,126 536" marker-end="url(#aAmber)"/>
+  </g>
+
+  <!-- traveling sparks -->
+  <g id="sparks">
+    <circle class="spark" r="5" fill="#59E0FF"><animateMotion dur="2.2s" repeatCount="indefinite"><mpath href="#w-aims-ocp"/></animateMotion></circle>
+    <circle class="spark" r="5" fill="#6BA4FF"><animateMotion dur="2.2s" repeatCount="indefinite"><mpath href="#w-ocp-api"/></animateMotion></circle>
+    <circle class="spark" r="5.5" fill="#6BA4FF"><animateMotion dur="2.6s" repeatCount="indefinite"><mpath href="#w-core-web"/></animateMotion></circle>
+    <circle class="spark" r="5.5" fill="#34D399"><animateMotion dur="3s" repeatCount="indefinite"><mpath href="#w-web-db"/></animateMotion></circle>
+    <circle class="spark" r="5.5" fill="#59E0FF"><animateMotion dur="3s" repeatCount="indefinite" begin=".5s"><mpath href="#w-web-efrc"/></animateMotion></circle>
+    <circle class="spark" r="5.5" fill="#A66BFF"><animateMotion dur="3s" repeatCount="indefinite" begin="1s"><mpath href="#w-web-nav"/></animateMotion></circle>
+    <circle class="spark" r="5.5" fill="#FFB23E"><animateMotion dur="3s" repeatCount="indefinite" begin="1.5s"><mpath href="#w-web-email"/></animateMotion></circle>
+    <circle class="spark" r="5.5" fill="#2FD7C4"><animateMotion dur="2.4s" repeatCount="indefinite"><mpath href="#w-web-google"/></animateMotion></circle>
+    <circle class="spark" r="6" fill="#FFB23E"><animateMotion dur="3.6s" repeatCount="indefinite"><mpath href="#w-google-mobile"/></animateMotion></circle>
+    <circle class="spark" r="5.5" fill="#6BA4FF"><animateMotion dur="2.6s" repeatCount="indefinite" begin="1.3s"><mpath href="#w-core-mobile"/></animateMotion></circle>
+  </g>
+
+  <!-- ============ NODES ============ -->
+
+  <!-- MOBILE APP -->
+  <g class="node" data-id="mobile">
+    <rect x="20" y="382" width="206" height="152" rx="16" fill="url(#gNode)" stroke="var(--violet)" stroke-width="2"/>
+    <rect x="100" y="404" width="46" height="76" rx="7" fill="none" stroke="var(--violet)" stroke-width="1.8" opacity=".8"/>
+    <circle cx="123" cy="470" r="4" fill="var(--violet)"/>
+    <text class="nt" x="123" y="510" text-anchor="middle" font-size="17">Mobile App</text>
+    <text class="ns" x="123" y="530" text-anchor="middle" font-size="11">invoke · revoke · alerts</text>
+  </g>
+
+  <!-- CORE RECTANGLE -->
+  <g class="node" data-id="core">
+    <rect x="330" y="246" width="330" height="480" rx="22" fill="url(#gCore)" stroke="rgba(110,139,255,.5)" stroke-width="2.2"/>
+    <text x="350" y="274" font-size="13" letter-spacing="2.5" fill="var(--blue-2)" font-family="var(--disp)" font-weight="600">MCC-MEL INTEGRATION CORE</text>
+
+    <!-- AIMS API (M1) -->
+    <g class="mon-target" data-id="aims">
+      <rect x="365" y="299" width="260" height="58" rx="12" fill="url(#gNode)" stroke="var(--cyan)" stroke-width="2"/>
+      <circle cx="385" cy="328" r="5" fill="var(--cyan)" filter="url(#glow)"/>
+      <text class="nt" x="403" y="325" font-size="16" text-anchor="start">AIMS API</text>
+      <text class="ns" x="403" y="344" font-size="10.5" text-anchor="start">system of record · forward feed</text>
+    </g>
+
+    <!-- OCP hexagon -->
+    <g data-id="ocp">
+      <circle cx="495" cy="470" r="68" fill="none" stroke="var(--blue)" opacity=".25" filter="url(#soft)"/>
+      <polygon points="458,425 532,425 570,470 532,515 458,515 420,470" fill="url(#gOcp)" stroke="var(--blue-2)" stroke-width="2.2"/>
+      <text class="nt" x="495" y="468" font-size="20" text-anchor="middle">OCP</text>
+      <text x="495" y="490" font-size="10.5" text-anchor="middle" fill="#BFD4FF">forward</text>
+    </g>
+
+    <!-- API invoke/revoke (M2) -->
+    <g class="mon-target" data-id="api">
+      <rect x="355" y="572" width="280" height="132" rx="14" fill="url(#gNode)" stroke="var(--blue-2)" stroke-width="2"/>
+      <text x="495" y="595" font-size="13" letter-spacing="2" text-anchor="middle" fill="var(--blue-2)" font-family="var(--disp)" font-weight="600">API</text>
+      <g>
+        <rect x="372" y="606" width="116" height="80" rx="10" fill="rgba(46,123,255,.16)" stroke="rgba(110,139,255,.5)" stroke-width="1.6"/>
+        <text class="nt" x="430" y="640" font-size="14" text-anchor="middle">Invoke</text>
+        <text class="nt" x="430" y="658" font-size="14" text-anchor="middle">Call</text>
+      </g>
+      <g>
+        <rect x="502" y="606" width="116" height="80" rx="10" fill="rgba(166,107,255,.14)" stroke="rgba(166,107,255,.45)" stroke-width="1.6"/>
+        <text class="nt" x="560" y="640" font-size="14" text-anchor="middle">Revoke</text>
+        <text class="nt" x="560" y="658" font-size="14" text-anchor="middle">Call</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- WEB APP (M3) -->
+  <g class="node mon-target" data-id="web">
+    <rect x="770" y="382" width="240" height="150" rx="16" fill="url(#gNode)" stroke="var(--teal)" stroke-width="2"/>
+    <circle cx="792" cy="406" r="5" fill="var(--teal)" filter="url(#glow)"/>
+    <text class="nt" x="890" y="452" font-size="17" text-anchor="middle">Web MCC-MEL App</text>
+    <text class="ns" x="890" y="472" font-size="11" text-anchor="middle">operations console</text>
+    <text class="ns" x="890" y="504" font-size="10.5" text-anchor="middle" fill="var(--ink-faint)">DB · EFRC · Navblue · Email</text>
+  </g>
+
+  <!-- GOOGLE API -->
+  <g class="node" data-id="google">
+    <rect x="770" y="610" width="240" height="106" rx="14" fill="url(#gNode)" stroke="var(--blue-2)" stroke-width="2"/>
+    <circle cx="792" cy="632" r="5" fill="var(--blue-2)" filter="url(#glow)"/>
+    <text class="nt" x="890" y="656" font-size="16" text-anchor="middle">Google API</text>
+    <text class="ns" x="890" y="676" font-size="11" text-anchor="middle">FCM push gateway</text>
+    <text class="ns" x="890" y="698" font-size="10.5" text-anchor="middle" fill="var(--amber)">→ notifies Mobile App</text>
+  </g>
+
+  <!-- DATABASE (M4) cylinder -->
+  <g class="node mon-target" data-id="db">
+    <g stroke="var(--green)" stroke-width="2" fill="url(#gNode)">
+      <path d="M1220 132 a80 16 0 0 0 160 0 v72 a80 16 0 0 1 -160 0 z"/>
+      <ellipse cx="1300" cy="132" rx="80" ry="16"/>
+    </g>
+    <text class="nt" x="1300" y="182" font-size="16" text-anchor="middle">Database</text>
+    <text class="ns" x="1300" y="200" font-size="10.5" text-anchor="middle">MEL records store</text>
+  </g>
+
+  <!-- EFRC API internal (M5) -->
+  <g class="node mon-target" data-id="efrc">
+    <rect x="1193" y="280" width="214" height="84" rx="13" fill="url(#gNode)" stroke="var(--cyan)" stroke-width="2"/>
+    <text class="nt" x="1300" y="318" font-size="16" text-anchor="middle">EFRC API</text>
+    <text class="ns" x="1300" y="338" font-size="11" text-anchor="middle" fill="var(--cyan)">internal API</text>
+  </g>
+
+  <!-- NAVBLUE API external (M6) -->
+  <g class="node mon-target" data-id="navblue">
+    <rect x="1193" y="428" width="214" height="84" rx="13" fill="url(#gNode)" stroke="var(--violet)" stroke-width="2"/>
+    <text class="nt" x="1300" y="466" font-size="16" text-anchor="middle">Navblue API</text>
+    <text class="ns" x="1300" y="486" font-size="11" text-anchor="middle" fill="var(--violet)">external API</text>
+  </g>
+
+  <!-- EMAIL (M7) -->
+  <g class="node mon-target" data-id="email">
+    <rect x="1193" y="578" width="214" height="84" rx="13" fill="url(#gNode)" stroke="var(--amber)" stroke-width="2"/>
+    <path d="M1268 606 l32 22 l32 -22" fill="none" stroke="var(--amber)" stroke-width="2"/>
+    <rect x="1268" y="606" width="64" height="44" rx="5" fill="none" stroke="var(--amber)" stroke-width="1.8"/>
+    <text class="nt" x="1300" y="644" font-size="15" text-anchor="middle" dy="6">Email</text>
+  </g>
+
+  <!-- ============ MONITOR PILLS (M1..M7) — on top of nodes ============ -->
+  <g id="pills" pointer-events="none"></g>
+  </g>
+</svg>
+
+  <div class="hud title">
+    <div class="badge">MEL</div>
+    <div>
+      <h1>MCC / MEL — Aircraft Integration Flow</h1>
+      <div class="sub">MAINTENANCE CONTROL CENTRE · MINIMUM EQUIPMENT LIST</div>
+      <div class="live"><span class="d"></span><span id="live-label">M1–M7 MONITORING POINTS SHOWN · CLICK NODE FOR DETAILS</span> · <span id="clock"></span></div>
+    </div>
+  </div>
+
+  <div class="hud legend">
+    <span class="lg"><b style="background:var(--cyan)"></b>internal</span>
+    <span class="lg"><b style="background:var(--violet)"></b>external</span>
+    <span class="lg"><b style="background:var(--green)"></b>datastore</span>
+    <span class="lg"><b style="background:var(--amber)"></b>email · push</span>
+    <span class="lg"><i style="background:var(--wire)"></i>data flow</span>
+  </div>
+
+  <div class="hud mon">
+    <h2>Monitoring nodes</h2>
+    <div id="monlist"></div>
+  </div>
+</div>
+
+<script>
+const NS='http://www.w3.org/2000/svg';
+const el=(t,a={})=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+
+const svg=document.getElementById('svg');
+const VB_W=1620,VB_H=980;
+const view={x:0,y:0,w:VB_W,h:VB_H};
+const ZMIN=.35,ZMAX=3.5;
+let didPan=false;
+
+function applyView(){
+  svg.setAttribute('viewBox',`${view.x} ${view.y} ${view.w} ${view.h}`);
+}
+function svgPoint(clientX,clientY){
+  const pt=svg.createSVGPoint();pt.x=clientX;pt.y=clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+function zoomAt(clientX,clientY,factor){
+  const p=svgPoint(clientX,clientY);
+  const nw=Math.min(VB_W/ZMIN,Math.max(VB_W/ZMAX,view.w*factor));
+  const nh=nw*(VB_H/VB_W);
+  const rx=(p.x-view.x)/view.w, ry=(p.y-view.y)/view.h;
+  view.x=p.x-rx*nw; view.y=p.y-ry*nh; view.w=nw; view.h=nh;
+  applyView();
+}
+svg.addEventListener('wheel',e=>{
+  e.preventDefault();
+  zoomAt(e.clientX,e.clientY,e.deltaY<0?0.9:1.1);
+},{passive:false});
+
+let pan=null;
+svg.addEventListener('pointerdown',e=>{
+  if(e.button!==0&&e.button!==1)return;
+  pan={x:view.x,y:view.y,sx:e.clientX,sy:e.clientY,moved:false};
+  svg.classList.add('panning');
+  svg.setPointerCapture(e.pointerId);
+});
+svg.addEventListener('pointermove',e=>{
+  if(!pan)return;
+  const rect=svg.getBoundingClientRect();
+  const dx=(e.clientX-pan.sx)*(view.w/rect.width);
+  const dy=(e.clientY-pan.sy)*(view.h/rect.height);
+  if(Math.hypot(e.clientX-pan.sx,e.clientY-pan.sy)>4)pan.moved=true;
+  if(pan.moved){view.x=pan.x-dx;view.y=pan.y-dy;applyView();}
+});
+function endPan(e){
+  if(!pan)return;
+  if(pan.moved)didPan=true;
+  pan=null;
+  svg.classList.remove('panning');
+  try{svg.releasePointerCapture(e.pointerId);}catch(_){}
+}
+svg.addEventListener('pointerup',endPan);
+svg.addEventListener('pointercancel',endPan);
+
+/* grid */
+const grid=document.getElementById('grid');
+for(let x=0;x<=1480;x+=74) grid.appendChild(el('line',{x1:x,y1:0,x2:x,y2:940}));
+for(let y=0;y<=940;y+=74) grid.appendChild(el('line',{x1:0,y1:y,x2:1480,y2:y}));
+
+/* monitor pills on nodes — M1..M7 */
+const MON=[
+  ['M1','aims',    'AIMS API',               618, 305],
+  ['M2','api',     'Invoke / Revoke API',    622, 580],
+  ['M3','web',     'Web MCC-MEL App',          998, 390],
+  ['M4','db',      'Database',                1368, 118],
+  ['M5','efrc',    'EFRC API',                1395, 288],
+  ['M6','navblue',  'Navblue API',             1395, 436],
+  ['M7','email',   'Email',                   1395, 586],
+];
+const pills=document.getElementById('pills');
+const pillByNode={};
+MON.forEach(([id,nodeId,,x,y])=>{
+  const g=el('g',{class:'mpill','data-node':nodeId});
+  g.appendChild(el('rect',{x:x-24,y:y-14,width:48,height:26,rx:7,fill:'#34E0A1',stroke:'#04122A','stroke-width':1.6,filter:'url(#glow)'}));
+  const t=el('text',{x:x,y:y+1,'text-anchor':'middle','dominant-baseline':'middle','font-size':13});t.textContent=id;
+  g.appendChild(t);
+  const ring=el('circle',{class:'live-dot',cx:x+30,cy:y,r:4.5,fill:'#34E0A1'});
+  ring.appendChild(el('animate',{attributeName:'opacity',values:'1;.2;1',dur:'1.6s',repeatCount:'indefinite'}));
+  g.appendChild(ring);
+  pills.appendChild(g);
+  pillByNode[nodeId]=g;
+});
+
+/* monitoring panel list */
+const monlist=document.getElementById('monlist');
+const rowByNode={};
+MON.forEach(([id,nodeId,name])=>{
+  const r=document.createElement('div');r.className='mrow';r.dataset.node=nodeId;
+  r.innerHTML=`<span class="mid">${id}</span><span class="mname">${name}</span><span class="dot"></span>`;
+  monlist.appendChild(r);
+  rowByNode[nodeId]=r;
+});
+
+/* select / highlight a monitoring node */
+let activeMon=null;
+const monPanel=document.querySelector('.mon');
+const liveLabel=document.getElementById('live-label');
+function setMon(nodeId){
+  activeMon=activeMon===nodeId?null:nodeId;
+  Object.values(pillByNode).forEach(p=>p.classList.toggle('active',p.dataset.node===activeMon));
+  Object.values(rowByNode).forEach(r=>r.classList.toggle('active',r.dataset.node===activeMon));
+  monPanel.classList.toggle('open',!!activeMon);
+  liveLabel.textContent=activeMon?'MONITORING ACTIVE':'M1–M7 MONITORING POINTS SHOWN · CLICK NODE FOR DETAILS';
+  setHL(activeMon);
+}
+document.querySelectorAll('.mon-target').forEach(n=>{
+  n.style.cursor='pointer';
+  n.addEventListener('click',e=>{
+    if(didPan){didPan=false;return;}
+    e.stopPropagation();setMon(n.dataset.id);
+  });
+});
+Object.values(rowByNode).forEach(r=>{
+  r.addEventListener('click',()=>setMon(r.dataset.node));
+});
+svg.addEventListener('click',e=>{
+  if(didPan){didPan=false;return;}
+  if(e.target.closest('.mon-target'))return;
+  if(!activeMon)return;
+  activeMon=null;
+  Object.values(pillByNode).forEach(p=>p.classList.remove('active'));
+  Object.values(rowByNode).forEach(r=>r.classList.remove('active'));
+  monPanel.classList.remove('open');
+  liveLabel.textContent='M1–M7 MONITORING POINTS SHOWN · CLICK NODE FOR DETAILS';
+  setHL(null);
+});
+
+/* hover highlight: node -> its wires + neighbours */
+const wires=[...document.querySelectorAll('path.wire')];
+const nodes=[...document.querySelectorAll('.node[data-id]')];
+const monTargets=[...document.querySelectorAll('.mon-target[data-id]')];
+function setHL(id){
+  if(!id){wires.forEach(w=>w.classList.remove('hl','off'));nodes.forEach(n=>n.classList.remove('dim'));monTargets.forEach(n=>n.classList.remove('dim'));return;}
+  const near=new Set([id]);
+  wires.forEach(w=>{const ns=w.dataset.nodes.split(' ');const on=ns.includes(id);
+    w.classList.toggle('hl',on);w.classList.toggle('off',!on); if(on)ns.forEach(n=>near.add(n));});
+  nodes.forEach(n=>n.classList.toggle('dim',!near.has(n.dataset.id)&&!(id&&n.querySelector(`.mon-target[data-id="${id}"]`))));
+  monTargets.forEach(n=>n.classList.toggle('dim',!near.has(n.dataset.id)));
+}
+nodes.forEach(n=>{
+  n.addEventListener('pointerenter',()=>{if(activeMon||pan)return;setHL(n.dataset.id);});
+  n.addEventListener('pointerleave',()=>{if(activeMon||pan)return;setHL(null);});
+});
+monTargets.forEach(n=>{
+  n.addEventListener('pointerenter',()=>{if(activeMon||pan)return;setHL(n.dataset.id);});
+  n.addEventListener('pointerleave',()=>{if(activeMon||pan)return;setHL(null);});
+});
+
+/* clock */
+setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB',{hour12:false})+' IST';},1000);
+document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB',{hour12:false})+' IST';
+</script>
+</body>
+</html>
